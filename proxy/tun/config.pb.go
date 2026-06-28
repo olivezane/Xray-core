@@ -30,6 +30,7 @@ type Config struct {
 	UserLevel              uint32                 `protobuf:"varint,5,opt,name=user_level,json=userLevel,proto3" json:"user_level,omitempty"`
 	AutoSystemRoutingTable []string               `protobuf:"bytes,6,rep,name=auto_system_routing_table,json=autoSystemRoutingTable,proto3" json:"auto_system_routing_table,omitempty"`
 	AutoOutboundsInterface string                 `protobuf:"bytes,7,opt,name=auto_outbounds_interface,json=autoOutboundsInterface,proto3" json:"auto_outbounds_interface,omitempty"`
+	StackType              string                 `protobuf:"bytes,8,opt,name=stack_type,json=stackType,proto3" json:"stack_type,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -109,6 +110,13 @@ func (x *Config) GetAutoSystemRoutingTable() []string {
 func (x *Config) GetAutoOutboundsInterface() string {
 	if x != nil {
 		return x.AutoOutboundsInterface
+	}
+	return ""
+}
+
+func (x *Config) GetStackType() string {
+	if x != nil {
+		return x.StackType
 	}
 	return ""
 }
