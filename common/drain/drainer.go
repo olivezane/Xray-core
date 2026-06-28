@@ -7,6 +7,11 @@ import (
 	"github.com/xtls/xray-core/common/errors"
 )
 
+type Drainer interface {
+	AcknowledgeReceive(size int)
+	Drain(reader io.Reader) error
+}
+
 type BehaviorSeedLimitedDrainer struct {
 	DrainSize int
 }
