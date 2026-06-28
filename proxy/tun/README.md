@@ -23,7 +23,7 @@ Examples of how to achieve this on a simple Linux system (Ubuntu with systemd-ne
 
 Due to this inbound not actually being a proxy, the configuration ignore required listen and port options, and never listen on any port. \
 Here is simple Xray config snippet to enable the inbound:
-```
+```json
 {
   "inbounds": [
     {
@@ -31,11 +31,13 @@ Here is simple Xray config snippet to enable the inbound:
       "protocol": "tun",
       "settings": {
         "name": "xray0",
-        "MTU": 1492
+        "MTU": 1492,
+        "stackType": "gvisor"
       }
     }
   ],
 ```
+- `stackType` — selects the TCP/IP stack implementation: `"gvisor"` (default) or `"system"`. See STACK section below.
 
 ## SUPPORTED FEATURES
 
@@ -98,6 +100,16 @@ In simple case this can be just disabled with
 ```
 But proper approach should be defining your route tables fully and consistently, adding all routes corresponding to traffic that flow through them.
 
+## STACK
+
+Two TCP/IP stack implementations are available, selectable via `stackType`:
+
+**`"gvisor"` (default)** — Uses gVisor's userspace TCP/IP stack. Cross-platform, consistent behavior across all OSes, no dependency on host network stack features. UDP uses FullCone NAT.
+
+**`"system"`** — Uses the host OS network stack via standard socket APIs (Winsock on Windows, raw sockets on Linux). The OS handles TCP congestion control, retransmission, and state management. Currently only supported on Windows. On unsupported platforms the inbound will fail to start.
+
+Windows system stack reads raw IP packets from Wintun, terminates client TCP in the system stack layer, creates real OS outbound connections, and forward data between them with transparent seq/ack translation. Supports IPv4/IPv6 TCP, UDP, and ICMP Echo.
+
 ## EXAMPLES
 
 systemd-networkd \
@@ -147,6 +159,8 @@ All in all systemd-networkd and its derivatives (like netplan or NetworkManager)
 
 Windows version of the same functionality is implemented through Wintun library. \
 To make it start, wintun.dll specific for your Windows/arch must be present next to Xray.exe binary.
+
+When using `"stackType": "system"`, the system stack reads and writes to the Wintun adapter directly, creating real Winsock TCP/UDP connections to forward proxied traffic.
 
 After the start network adapter with the name you chose in the config will be created in the system, and exist while Xray is running.
 
