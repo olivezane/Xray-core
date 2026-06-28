@@ -5,6 +5,7 @@ package tun
 import (
 	"errors"
 	"net"
+	"os"
 	_ "unsafe"
 
 	"golang.zx2c4.com/wireguard/tun"
@@ -31,6 +32,8 @@ var (
 	_ Tun          = (*FreeBSDTun)(nil)
 	_ GVisorDevice = (*FreeBSDTun)(nil)
 )
+
+func (t *FreeBSDTun) File() *os.File { return t.device.File() }
 
 // NewTun builds new tun interface handler
 func NewTun(options *Config) (Tun, error) {

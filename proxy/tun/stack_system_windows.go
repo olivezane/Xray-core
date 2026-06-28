@@ -3,8 +3,6 @@
 package tun
 
 import (
-	"io"
-
 	"golang.org/x/sys/windows"
 
 	"github.com/xtls/xray-core/common/errors"
@@ -38,11 +36,6 @@ func (w *windowsPacketIO) ReadPacket() ([]byte, error) {
 }
 
 func (w *windowsPacketIO) WritePacket(data []byte) error {
-	w.tun.RLock()
-	defer w.tun.RUnlock()
-	if w.tun.closed {
-		return io.ErrClosedPipe
-	}
 	packet, err := w.tun.session.AllocateSendPacket(len(data))
 	if err != nil {
 		return err

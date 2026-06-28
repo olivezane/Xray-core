@@ -44,6 +44,7 @@ type stackGVisor struct {
 
 // NewStack builds a new ip stack based on the stack type in options
 func NewStack(ctx context.Context, options StackOptions, handler *Handler) (Stack, error) {
+	errors.LogInfo(ctx, "[tun] using ", options.StackType, " stack")
 	switch options.StackType {
 	case StackTypeSystem:
 		return newStackSystem(ctx, options, handler)

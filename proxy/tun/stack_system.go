@@ -44,8 +44,6 @@ type tcpFlowConn struct {
 	dstIP     netip.Addr
 	srcPort   uint16
 	dstPort   uint16
-	clientISN uint32
-	serverISN uint32
 
 	mu         sync.Mutex
 	clientNext uint32
@@ -285,8 +283,6 @@ func (s *systemStack) handleTCPSYN(key flowKey, srcIP, dstIP netip.Addr, srcPort
 		dstIP:     dstIP,
 		srcPort:   srcPort,
 		dstPort:   dstPort,
-		clientISN: clientISN,
-		serverISN: serverISN,
 		clientNext: clientISN + 1,
 		serverNext: serverISN + 1,
 		incoming:  make(chan []byte, 1024),
@@ -300,7 +296,7 @@ func (s *systemStack) handleTCPSYN(key flowKey, srcIP, dstIP netip.Addr, srcPort
 	s.tcpFlows[key] = f
 	s.mu.Unlock()
 
-	s.writeRawPacket(buildTCPPacket(dstIP, srcIP, dstPort, srcPort,
+	s.pio.WritePacket(buildTCPPacket(dstIP, srcIP, dstPort, srcPort,
 		serverISN, clientISN+1, tcpFlagSYN|tcpFlagACK, nil))
 
 	dest := xnet.TCPDestination(xnet.IPAddress(dstIP.AsSlice()), xnet.Port(dstPort))
@@ -379,7 +375,7 @@ func (s *systemStack) handleICMPv4(data []byte) {
 	}
 	errors.LogDebug(s.ctx, "[tun][icmp] v4 local echo reply ", dstIP, " -> ", srcIP, " id=", ident, " seq=", sequence)
 	packet := buildIPv4(protocolICMPv4, dstIP, srcIP, reply)
-	s.writeRawPacket(packet)
+	s.pio.WritePacket(packet)
 }
 
 func (s *systemStack) handleICMPv6(data []byte) {
@@ -402,23 +398,7 @@ func (s *systemStack) handleICMPv6(data []byte) {
 	}
 	errors.LogDebug(s.ctx, "[tun][icmp] v6 local echo reply ", dstIP, " -> ", srcIP, " id=", ident, " seq=", sequence)
 	packet := buildIPv6(protocolICMPv6, dstIP, srcIP, reply)
-	s.writeRawPacket(packet)
-}
-
-func (s *systemStack) removeFlow(key flowKey) {
-	s.mu.Lock()
-	delete(s.tcpFlows, key)
-	s.mu.Unlock()
-}
-
-func (s *systemStack) removeUDPFlow(key flowKey) {
-	s.mu.Lock()
-	delete(s.udpFlows, key)
-	s.mu.Unlock()
-}
-
-func (s *systemStack) writeRawPacket(data []byte) {
-	_ = s.pio.WritePacket(data)
+	s.pio.WritePacket(packet)
 }
 
 func (c *tcpFlowConn) Read(b []byte) (int, error) {
@@ -431,13 +411,10 @@ func (c *tcpFlowConn) Read(b []byte) (int, error) {
 
 func (c *tcpFlowConn) Write(b []byte) (int, error) {
 	c.mu.Lock()
-	seq := c.serverNext
-	c.serverNext += uint32(len(b))
-	ack := c.clientNext
-	c.mu.Unlock()
-
 	packet := buildTCPPacket(c.dstIP, c.srcIP, c.dstPort, c.srcPort,
-		seq, ack, tcpFlagACK, b)
+		c.serverNext, c.clientNext, tcpFlagACK, b)
+	c.serverNext += uint32(len(b))
+	c.mu.Unlock()
 	err := c.stack.pio.WritePacket(packet)
 	if err != nil {
 		return 0, err
@@ -447,14 +424,12 @@ func (c *tcpFlowConn) Write(b []byte) (int, error) {
 
 func (c *tcpFlowConn) Close() error {
 	c.closeOnce.Do(func() {
-		seq := c.serverNext
-		ack := c.clientNext
-
-		packet := buildTCPPacket(c.dstIP, c.srcIP, c.dstPort, c.srcPort,
-			seq, ack, tcpFlagFIN|tcpFlagACK, nil)
-		c.stack.pio.WritePacket(packet)
+		c.stack.pio.WritePacket(buildTCPPacket(c.dstIP, c.srcIP, c.dstPort, c.srcPort,
+			c.serverNext, c.clientNext, tcpFlagFIN|tcpFlagACK, nil))
 		close(c.incoming)
-		c.stack.removeFlow(c.key)
+		c.stack.mu.Lock()
+		delete(c.stack.tcpFlows, c.key)
+		c.stack.mu.Unlock()
 	})
 	return nil
 }
@@ -491,7 +466,9 @@ func (c *udpFlowConn) Write(b []byte) (int, error) {
 func (c *udpFlowConn) Close() error {
 	c.closeOnce.Do(func() {
 		close(c.incoming)
-		c.stack.removeUDPFlow(c.key)
+		c.stack.mu.Lock()
+		delete(c.stack.udpFlows, c.key)
+		c.stack.mu.Unlock()
 	})
 	return nil
 }

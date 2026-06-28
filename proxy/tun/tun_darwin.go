@@ -57,6 +57,8 @@ var (
 	_ GVisorDevice = (*DarwinTun)(nil)
 )
 
+func (t *DarwinTun) File() *os.File { return t.tunFile }
+
 func NewTun(options *Config) (Tun, error) {
 	// Check if fd is provided via environment (iOS mode)
 	fdStr := platform.NewEnvFlag(platform.TunFdKey).GetValue(func() string { return "" })
