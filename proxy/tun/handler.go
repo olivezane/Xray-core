@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
@@ -100,6 +101,13 @@ func (t *Handler) Start() error {
 		}
 		updater = &InterfaceUpdater{tunIndex: tunIndex, fixedName: t.config.AutoOutboundsInterface}
 		updater.Update()
+		for i := 0; i < 30; i++ {
+			if updater.Get() != nil {
+				break
+			}
+			time.Sleep(time.Second)
+			updater.Update()
+		}
 		internet.RegisterDialerController(func(network, address string, c syscall.RawConn) error {
 			iface := updater.Get()
 			if iface == nil {

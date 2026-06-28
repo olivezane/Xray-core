@@ -371,5 +371,31 @@ func findOutboundInterface(tunIndex int, fixedName string) (*net.Interface, erro
 		return iface, nil
 	}
 
+	// ponytail: fallback to default route when probe IPs are unreachable
+	routes, err := netlink.RouteList(nil, netlink.FAMILY_V4)
+	if err == nil {
+		for _, route := range routes {
+			if route.LinkIndex == tunIndex {
+				continue
+			}
+			if route.Dst != nil && route.Dst.String() != "0.0.0.0/0" {
+				continue
+			}
+			link, err := netlink.LinkByIndex(route.LinkIndex)
+			if err != nil {
+				continue
+			}
+			attrs := link.Attrs()
+			if attrs.Flags&net.FlagUp == 0 {
+				continue
+			}
+			iface, err := net.InterfaceByIndex(route.LinkIndex)
+			if err != nil {
+				continue
+			}
+			return iface, nil
+		}
+	}
+
 	return nil, errors.New("no usable outbound interface found")
 }
