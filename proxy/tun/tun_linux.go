@@ -53,7 +53,17 @@ func NewTun(options *Config) (Tun, error) {
 		return nil, err
 	}
 
-	tunLink, err = setup(options.Name, int(options.MTU))
+	addresses := make([]netip.Prefix, 0, len(options.Gateway))
+	for _, gw := range options.Gateway {
+		prefix, err := netip.ParsePrefix(gw)
+		if err != nil {
+			_ = unix.Close(tunFd)
+			return nil, errors.New("invalid gateway address ", gw).Base(err)
+		}
+		addresses = append(addresses, prefix)
+	}
+
+	tunLink, err = setup(options.Name, int(options.MTU), addresses)
 	if err != nil {
 		_ = unix.Close(tunFd)
 		return nil, err
@@ -147,7 +157,7 @@ func open(name string) (int, error) {
 }
 
 // setup the interface through netlink socket
-func setup(name string, MTU int) (netlink.Link, error) {
+func setup(name string, MTU int, addresses []netip.Prefix) (netlink.Link, error) {
 	tunLink, err := netlink.LinkByName(name)
 	if err != nil {
 		return nil, err
@@ -157,6 +167,19 @@ func setup(name string, MTU int) (netlink.Link, error) {
 	if err != nil {
 		_ = netlink.LinkSetDown(tunLink)
 		return nil, err
+	}
+
+	for _, prefix := range addresses {
+		addr := &netlink.Addr{
+			IPNet: &net.IPNet{
+				IP:   prefix.Addr().AsSlice(),
+				Mask: net.CIDRMask(prefix.Bits(), prefix.Addr().BitLen()),
+			},
+		}
+		if err := netlink.AddrAdd(tunLink, addr); err != nil {
+			_ = netlink.LinkSetDown(tunLink)
+			return nil, errors.New("failed to add address ", prefix).Base(err)
+		}
 	}
 
 	return tunLink, nil
