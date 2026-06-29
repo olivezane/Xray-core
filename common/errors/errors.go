@@ -3,6 +3,7 @@ package errors // import "github.com/xtls/xray-core/common/errors"
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"strings"
 
@@ -11,7 +12,15 @@ import (
 	"github.com/xtls/xray-core/common/serial"
 )
 
-const trim = len("github.com/xtls/xray-core/")
+const srcDir = "xray-core/"
+
+func shortFile(file string) string {
+	if idx := strings.Index(file, srcDir); idx >= 0 {
+		return file[idx+len(srcDir):]
+	}
+	return file
+}
+
 
 type hasInnerError interface {
 	// Unwrap returns the underlying error of this one.
@@ -122,19 +131,11 @@ type ExportOption func(*ExportOptionHolder)
 
 // New returns a new error object with message formed from given arguments.
 func New(msg ...interface{}) *Error {
-	pc, _, _, _ := runtime.Caller(1)
-	details := runtime.FuncForPC(pc).Name()
-	if len(details) >= trim {
-		details = details[trim:]
-	}
-	i := strings.Index(details, ".")
-	if i > 0 {
-		details = details[:i]
-	}
+	_, file, line, _ := runtime.Caller(1)
 	return &Error{
 		message:  msg,
 		severity: log.Severity_Info,
-		caller:   details,
+		caller:   fmt.Sprintf("%s:%d", shortFile(file), line),
 	}
 }
 
@@ -171,19 +172,11 @@ func LogErrorInner(ctx context.Context, inner error, msg ...interface{}) {
 }
 
 func doLog(ctx context.Context, inner error, severity log.Severity, msg ...interface{}) {
-	pc, _, _, _ := runtime.Caller(2)
-	details := runtime.FuncForPC(pc).Name()
-	if len(details) >= trim {
-		details = details[trim:]
-	}
-	i := strings.Index(details, ".")
-	if i > 0 {
-		details = details[:i]
-	}
+	_, file, line, _ := runtime.Caller(2)
 	err := &Error{
 		message:  msg,
 		severity: severity,
-		caller:   details,
+		caller:   fmt.Sprintf("%s:%d", shortFile(file), line),
 		inner:    inner,
 	}
 	if ctx != nil && ctx != context.Background() {

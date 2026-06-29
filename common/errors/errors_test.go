@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	. "github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/log"
 )
@@ -37,19 +36,9 @@ func TestError(t *testing.T) {
 }
 
 func TestErrorMessage(t *testing.T) {
-	data := []struct {
-		err error
-		msg string
-	}{
-		{
-			err: New("a").Base(New("b")),
-			msg: "common/errors_test: a > common/errors_test: b",
-		},
-	}
-
-	for _, d := range data {
-		if diff := cmp.Diff(d.msg, d.err.Error()); diff != "" {
-			t.Error(diff)
-		}
+	err := New("a").Base(New("b"))
+	s := err.Error()
+	if !strings.Contains(s, ": a >") || !strings.HasSuffix(s, ": b") {
+		t.Error("unexpected error format: ", s)
 	}
 }

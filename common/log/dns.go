@@ -45,7 +45,7 @@ type dnsStatus string
 var (
 	DNSQueried        = dnsStatus("got answer:")
 	DNSCacheHit       = dnsStatus("cache HIT:")
-	DNSCacheOptimiste = dnsStatus("cache OPTIMISTE:")
+	DNSCacheOptimiste = dnsStatus("cache OPTIMISTIC:")
 )
 
 func joinNetIP(ips []net.IP) string {

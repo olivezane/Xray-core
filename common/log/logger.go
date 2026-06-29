@@ -1,9 +1,10 @@
 package log
 
 import (
+	"fmt"
 	"io"
-	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/xtls/xray-core/common/platform"
@@ -115,25 +116,75 @@ func (l *generalLogger) Close() error {
 }
 
 type consoleLogWriter struct {
-	logger *log.Logger
+	out    io.Writer
+	colored bool
 }
 
 func (w *consoleLogWriter) Write(s string) error {
-	w.logger.Print(s)
-	return nil
+	if w.colored {
+		s = colorize(s)
+	}
+	_, err := io.WriteString(w.out, time.Now().Format("2006-01-02T15:04:05.000Z07:00")+" "+s)
+	return err
 }
 
 func (w *consoleLogWriter) Close() error {
 	return nil
 }
 
-type fileLogWriter struct {
-	file   *os.File
-	logger *log.Logger
+func colorize(s string) string {
+	for _, c := range [][2]string{
+		{"[Error] ", "\033[31m"},
+		{"[Warning] ", "\033[33m"},
+		{"[Info] ", "\033[32m"},
+		{"[Debug] ", "\033[90m"},
+	} {
+		if strings.HasPrefix(s, c[0]) {
+			return c[1] + c[0] + "\033[0m" + s[len(c[0]):]
+		}
+	}
+	return s
 }
 
+type fileLogWriter struct {
+	file       *os.File
+	path       string
+	bytes      int64
+	maxSize    int64
+	maxBackups int
+}
+
+// ponytail: rotation on write if file exceeds maxSize. Keeps maxBackups numbered backups (.1, .2, ...).
+// Time-based rotation not needed — size-based is sufficient for long-running instances.
 func (w *fileLogWriter) Write(s string) error {
-	w.logger.Print(s)
+	ts := time.Now().Format("2006-01-02T15:04:05.000Z07:00")
+	line := ts + " " + s
+	if w.bytes+int64(len(line)) > w.maxSize {
+		if err := w.rotate(); err != nil {
+			return err
+		}
+	}
+	n, err := io.WriteString(w.file, line)
+	w.bytes += int64(n)
+	return err
+}
+
+func (w *fileLogWriter) rotate() error {
+	w.file.Close()
+	for i := w.maxBackups; i >= 1; i-- {
+		old := fmt.Sprintf("%s.%d", w.path, i)
+		os.Remove(old)
+		if i > 1 {
+			os.Rename(fmt.Sprintf("%s.%d", w.path, i-1), old)
+		}
+	}
+	os.Rename(w.path, w.path+".1")
+	file, err := os.OpenFile(w.path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
+	if err != nil {
+		return err
+	}
+	w.file = file
+	w.bytes = 0
 	return nil
 }
 
@@ -144,18 +195,14 @@ func (w *fileLogWriter) Close() error {
 // CreateStdoutLogWriter returns a LogWriterCreator that creates LogWriter for stdout.
 func CreateStdoutLogWriter() WriterCreator {
 	return func() Writer {
-		return &consoleLogWriter{
-			logger: log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lmicroseconds),
-		}
+		return &consoleLogWriter{out: os.Stdout, colored: true}
 	}
 }
 
 // CreateStderrLogWriter returns a LogWriterCreator that creates LogWriter for stderr.
 func CreateStderrLogWriter() WriterCreator {
 	return func() Writer {
-		return &consoleLogWriter{
-			logger: log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lmicroseconds),
-		}
+		return &consoleLogWriter{out: os.Stderr, colored: true}
 	}
 }
 
@@ -165,15 +212,23 @@ func CreateFileLogWriter(path string) (WriterCreator, error) {
 	if err != nil {
 		return nil, err
 	}
+	fi, _ := file.Stat()
 	file.Close()
 	return func() Writer {
 		file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 		if err != nil {
 			return nil
 		}
+		var size int64
+		if fi != nil {
+			size = fi.Size()
+		}
 		return &fileLogWriter{
-			file:   file,
-			logger: log.New(file, "", log.Ldate|log.Ltime|log.Lmicroseconds),
+			file:       file,
+			path:       path,
+			bytes:      size,
+			maxSize:    10 * 1024 * 1024,
+			maxBackups: 3,
 		}
 	}, nil
 }
