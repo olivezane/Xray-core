@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -44,7 +43,9 @@ func TestConfig_GetServiceName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
 			config := Config{ServiceName: test.ServiceName}
-			assert.Equal(t, test.Expected, config.getServiceName())
+			if got := config.getServiceName(); got != test.Expected {
+				t.Fatalf("got %q, want %q", got, test.Expected)
+			}
 		})
 	}
 }
@@ -79,7 +80,9 @@ func TestConfig_GetTunStreamName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
 			config := Config{ServiceName: test.ServiceName}
-			assert.Equal(t, test.Expected, config.getTunStreamName())
+			if got := config.getTunStreamName(); got != test.Expected {
+				t.Fatalf("got %q, want %q", got, test.Expected)
+			}
 		})
 	}
 }
@@ -114,7 +117,9 @@ func TestConfig_GetTunMultiStreamName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.TestName, func(t *testing.T) {
 			config := Config{ServiceName: test.ServiceName}
-			assert.Equal(t, test.Expected, config.getTunMultiStreamName())
+			if got := config.getTunMultiStreamName(); got != test.Expected {
+				t.Fatalf("got %q, want %q", got, test.Expected)
+			}
 		})
 	}
 }
@@ -122,8 +127,12 @@ func TestConfig_GetTunMultiStreamName(t *testing.T) {
 func TestSetUserAgent(t *testing.T) {
 	ua := "Test/1.0"
 	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithUserAgent(ua))
-	assert.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer conn.Close()
 	setUserAgent(conn, ua)
-	assert.Equal(t, ua, reflect.ValueOf(conn).Elem().FieldByName("dopts").FieldByName("copts").FieldByName("UserAgent").String())
+	if got := reflect.ValueOf(conn).Elem().FieldByName("dopts").FieldByName("copts").FieldByName("UserAgent").String(); got != ua {
+		t.Fatalf("got %q, want %q", got, ua)
+	}
 }

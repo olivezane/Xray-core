@@ -14,7 +14,7 @@ import (
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/errors"
 	xnet "github.com/xtls/xray-core/common/net"
-	"github.com/xtls/xray-core/common/signal/done"
+	"github.com/xtls/xray-core/common/net/cnc"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/extension"
 	"github.com/xtls/xray-core/features/outbound"
@@ -71,10 +71,7 @@ func (p *MetricsHandler) Start() error {
 		return nil
 	}
 
-	listener := &OutboundListener{
-		buffer: make(chan xnet.Conn, 4),
-		done:   done.New(),
-	}
+	listener := cnc.NewOutboundListener(4)
 	p.listener = listener
 
 	go p.serve(listener, handler)
@@ -83,10 +80,7 @@ func (p *MetricsHandler) Start() error {
 		errors.LogInfo(context.Background(), "failed to remove existing handler")
 	}
 
-	if err := p.ohm.AddHandler(context.Background(), &Outbound{
-		tag:      p.tag,
-		listener: listener,
-	}); err != nil {
+	if err := p.ohm.AddHandler(context.Background(), cnc.NewOutbound(p.tag, listener)); err != nil {
 		if closeErr := p.Close(); closeErr != nil {
 			errors.LogErrorInner(context.Background(), closeErr, "failed to close metrics server after start failure")
 		}

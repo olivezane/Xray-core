@@ -4,8 +4,14 @@ import (
 	"testing"
 
 	"github.com/apernet/quic-go/congestion"
-	"github.com/stretchr/testify/require"
 )
+
+func requireEqual(t *testing.T, want, got any) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
 
 func TestSetMaxDatagramSizeRescalesPacketSizedWindows(t *testing.T) {
 	const oldMaxDatagramSize = congestion.ByteCount(1000)
@@ -24,10 +30,10 @@ func TestSetMaxDatagramSizeRescalesPacketSizedWindows(t *testing.T) {
 
 	b.SetMaxDatagramSize(newMaxDatagramSize)
 
-	require.Equal(t, initialCongestionWindowPackets*newMaxDatagramSize, b.initialCongestionWindow)
-	require.Equal(t, maxCongestionWindowPackets*newMaxDatagramSize, b.maxCongestionWindow)
-	require.Equal(t, minCongestionWindowPackets*newMaxDatagramSize, b.minCongestionWindow)
-	require.Equal(t, initialCongestionWindowPackets*newMaxDatagramSize, b.congestionWindow)
+	requireEqual(t, initialCongestionWindowPackets*newMaxDatagramSize, b.initialCongestionWindow)
+	requireEqual(t, maxCongestionWindowPackets*newMaxDatagramSize, b.maxCongestionWindow)
+	requireEqual(t, minCongestionWindowPackets*newMaxDatagramSize, b.minCongestionWindow)
+	requireEqual(t, initialCongestionWindowPackets*newMaxDatagramSize, b.congestionWindow)
 }
 
 func TestSetMaxDatagramSizeClampsCongestionWindow(t *testing.T) {
@@ -40,8 +46,8 @@ func TestSetMaxDatagramSizeClampsCongestionWindow(t *testing.T) {
 
 	b.SetMaxDatagramSize(newMaxDatagramSize)
 
-	require.Equal(t, b.minCongestionWindow, b.congestionWindow)
-	require.Equal(t, b.minCongestionWindow, b.recoveryWindow)
+	requireEqual(t, b.minCongestionWindow, b.congestionWindow)
+	requireEqual(t, b.minCongestionWindow, b.recoveryWindow)
 }
 
 func TestNewBbrSenderAppliesProfiles(t *testing.T) {
@@ -98,33 +104,39 @@ func TestNewBbrSenderAppliesProfiles(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			b := NewBbrSender(DefaultClock{}, congestion.InitialPacketSize, tc.profile)
-			require.Equal(t, tc.profile, b.profile)
-			require.Equal(t, tc.highGain, b.highGain)
-			require.Equal(t, tc.highCwndGain, b.highCwndGain)
-			require.Equal(t, tc.congestionWindowGainConstant, b.congestionWindowGainConstant)
-			require.Equal(t, tc.numStartupRtts, b.numStartupRtts)
-			require.Equal(t, tc.drainToTarget, b.drainToTarget)
-			require.Equal(t, tc.detectOvershooting, b.detectOvershooting)
-			require.Equal(t, tc.bytesLostMultiplier, b.bytesLostMultiplierWhileDetectingOvershooting)
-			require.Equal(t, tc.enableAckAggregationDuringStartup, b.enableAckAggregationDuringStartup)
-			require.Equal(t, tc.expireAckAggregationInStartup, b.expireAckAggregationInStartup)
-			require.Equal(t, tc.enableOverestimateAvoidance, b.sampler.IsOverestimateAvoidanceEnabled())
-			require.Equal(t, tc.reduceExtraAckedOnBandwidthIncrease, b.sampler.maxAckHeightTracker.reduceExtraAckedOnBandwidthIncrease)
-			require.Equal(t, b.highGain, b.pacingGain)
-			require.Equal(t, b.highCwndGain, b.congestionWindowGain)
+			requireEqual(t, tc.profile, b.profile)
+			requireEqual(t, tc.highGain, b.highGain)
+			requireEqual(t, tc.highCwndGain, b.highCwndGain)
+			requireEqual(t, tc.congestionWindowGainConstant, b.congestionWindowGainConstant)
+			requireEqual(t, tc.numStartupRtts, b.numStartupRtts)
+			requireEqual(t, tc.drainToTarget, b.drainToTarget)
+			requireEqual(t, tc.detectOvershooting, b.detectOvershooting)
+			requireEqual(t, tc.bytesLostMultiplier, b.bytesLostMultiplierWhileDetectingOvershooting)
+			requireEqual(t, tc.enableAckAggregationDuringStartup, b.enableAckAggregationDuringStartup)
+			requireEqual(t, tc.expireAckAggregationInStartup, b.expireAckAggregationInStartup)
+			requireEqual(t, tc.enableOverestimateAvoidance, b.sampler.IsOverestimateAvoidanceEnabled())
+			requireEqual(t, tc.reduceExtraAckedOnBandwidthIncrease, b.sampler.maxAckHeightTracker.reduceExtraAckedOnBandwidthIncrease)
+			requireEqual(t, b.highGain, b.pacingGain)
+			requireEqual(t, b.highCwndGain, b.congestionWindowGain)
 		})
 	}
 }
 
 func TestParseProfile(t *testing.T) {
 	profile, err := ParseProfile("")
-	require.NoError(t, err)
-	require.Equal(t, ProfileStandard, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireEqual(t, ProfileStandard, profile)
 
 	profile, err = ParseProfile("Aggressive")
-	require.NoError(t, err)
-	require.Equal(t, ProfileAggressive, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireEqual(t, ProfileAggressive, profile)
 
 	_, err = ParseProfile("turbo")
-	require.EqualError(t, err, `unsupported BBR profile "turbo"`)
+	if err == nil || err.Error() != `unsupported BBR profile "turbo"` {
+		t.Fatalf("got %v, want unsupported BBR profile error", err)
+	}
 }

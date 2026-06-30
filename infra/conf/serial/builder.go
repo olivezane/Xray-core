@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/xtls/xray-core/common/cmdarg"
 	"github.com/xtls/xray-core/common/errors"
 	"github.com/xtls/xray-core/common/platform"
 	creflect "github.com/xtls/xray-core/common/reflect"
@@ -56,6 +57,27 @@ func mergeConfigs(files []*core.ConfigSource) (*conf.Config, error) {
 		cf.Override(c, file.Name)
 	}
 	return cf, nil
+}
+
+func BuildConfigFromArgs(args cmdarg.Arg, decoder readerDecoder) (*core.Config, error) {
+	cf := &conf.Config{}
+	for i, arg := range args {
+		errors.LogInfo(context.Background(), "Reading config: ", arg)
+		r, err := confloader.LoadConfig(arg)
+		if err != nil {
+			return nil, errors.New("failed to read config: ", arg).Base(err)
+		}
+		c, err := decoder(r)
+		if err != nil {
+			return nil, errors.New("failed to decode config: ", arg).Base(err)
+		}
+		if i == 0 {
+			*cf = *c
+			continue
+		}
+		cf.Override(c, arg)
+	}
+	return cf.Build()
 }
 
 func BuildConfig(files []*core.ConfigSource) (*core.Config, error) {

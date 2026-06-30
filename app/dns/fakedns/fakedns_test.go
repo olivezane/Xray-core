@@ -4,7 +4,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/net"
 	"github.com/xtls/xray-core/common/uuid"
@@ -13,6 +12,34 @@ import (
 )
 
 var ipPrefix = "198.1"
+
+func requireEqual(t *testing.T, want, got any) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func requireNotEqual(t *testing.T, a, b any) {
+	t.Helper()
+	if a == b {
+		t.Fatalf("got equal values %v", a)
+	}
+}
+
+func requireBool(t *testing.T, want, got bool) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func requireLen(t *testing.T, got []net.Address, want int) {
+	t.Helper()
+	if len(got) != want {
+		t.Fatalf("got length %d, want %d", len(got), want)
+	}
+}
 
 func TestNewFakeDnsHolder(_ *testing.T) {
 	_, err := NewFakeDNSHolder()
@@ -24,7 +51,7 @@ func TestFakeDnsHolderCreateMapping(t *testing.T) {
 	common.Must(err)
 
 	addr := fkdns.GetFakeIPForDomain("fakednstest.example.com")
-	assert.Equal(t, ipPrefix, addr[0].IP().String()[0:len(ipPrefix)])
+	requireEqual(t, ipPrefix, addr[0].IP().String()[0:len(ipPrefix)])
 }
 
 func TestFakeDnsHolderCreateMappingMany(t *testing.T) {
@@ -32,11 +59,11 @@ func TestFakeDnsHolderCreateMappingMany(t *testing.T) {
 	common.Must(err)
 
 	addr := fkdns.GetFakeIPForDomain("fakednstest.example.com")
-	assert.Equal(t, ipPrefix, addr[0].IP().String()[0:len(ipPrefix)])
+	requireEqual(t, ipPrefix, addr[0].IP().String()[0:len(ipPrefix)])
 
 	addr2 := fkdns.GetFakeIPForDomain("fakednstest2.example.com")
-	assert.Equal(t, ipPrefix, addr2[0].IP().String()[0:len(ipPrefix)])
-	assert.NotEqual(t, addr[0].IP().String(), addr2[0].IP().String())
+	requireEqual(t, ipPrefix, addr2[0].IP().String()[0:len(ipPrefix)])
+	requireNotEqual(t, addr[0].IP().String(), addr2[0].IP().String())
 }
 
 func TestFakeDnsHolderCreateMappingManyAndResolve(t *testing.T) {
@@ -48,12 +75,12 @@ func TestFakeDnsHolderCreateMappingManyAndResolve(t *testing.T) {
 
 	{
 		result := fkdns.GetDomainFromFakeDNS(addr[0])
-		assert.Equal(t, "fakednstest.example.com", result)
+		requireEqual(t, "fakednstest.example.com", result)
 	}
 
 	{
 		result := fkdns.GetDomainFromFakeDNS(addr2[0])
-		assert.Equal(t, "fakednstest2.example.com", result)
+		requireEqual(t, "fakednstest2.example.com", result)
 	}
 }
 
@@ -63,7 +90,7 @@ func TestFakeDnsHolderCreateMappingManySingleDomain(t *testing.T) {
 
 	addr := fkdns.GetFakeIPForDomain("fakednstest.example.com")
 	addr2 := fkdns.GetFakeIPForDomain("fakednstest.example.com")
-	assert.Equal(t, addr[0].IP().String(), addr2[0].IP().String())
+	requireEqual(t, addr[0].IP().String(), addr2[0].IP().String())
 }
 
 func TestGetFakeIPForDomainConcurrently(t *testing.T) {
@@ -79,7 +106,7 @@ func TestGetFakeIPForDomainConcurrently(t *testing.T) {
 	errg.Wait()
 	for i := 0; i < total; i++ {
 		for j := i + 1; j < total; j++ {
-			assert.NotEqual(t, addr[i][0].IP().String(), addr[j][0].IP().String())
+			requireNotEqual(t, addr[i][0].IP().String(), addr[j][0].IP().String())
 		}
 	}
 }
@@ -108,12 +135,12 @@ func TestFakeDnsHolderCreateMappingAndRollOver(t *testing.T) {
 	for i := 0; i <= 8192; i++ {
 		{
 			result := fkdns.GetDomainFromFakeDNS(addr[0])
-			assert.Equal(t, "fakednstest.example.com", result)
+			requireEqual(t, "fakednstest.example.com", result)
 		}
 
 		{
 			result := fkdns.GetDomainFromFakeDNS(addr2[0])
-			assert.Equal(t, "fakednstest2.example.com", result)
+			requireEqual(t, "fakednstest2.example.com", result)
 		}
 
 		{
@@ -123,7 +150,7 @@ func TestFakeDnsHolderCreateMappingAndRollOver(t *testing.T) {
 			rsaddr := tempAddr[0].IP().String()
 
 			result := fkdns.GetDomainFromFakeDNS(net.ParseAddress(rsaddr))
-			assert.Equal(t, domain, result)
+			requireEqual(t, domain, result)
 		}
 	}
 }
@@ -146,61 +173,67 @@ func TestFakeDNSMulti(t *testing.T) {
 
 	common.Must(err)
 
-	assert.Nil(t, err, "Should not throw error")
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = fakeMulti
 
 	t.Run("checkInRange", func(t *testing.T) {
 		t.Run("ipv4", func(t *testing.T) {
 			inPool := fakeMulti.IsIPInIPPool(net.IPAddress([]byte{240, 0, 0, 5}))
-			assert.True(t, inPool)
+			requireBool(t, true, inPool)
 		})
 		t.Run("ipv6", func(t *testing.T) {
 			ip, err := net.ResolveIPAddr("ip", "fddd:c5b4:ff5f:f4f0::5")
-			assert.Nil(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
 			inPool := fakeMulti.IsIPInIPPool(net.IPAddress(ip.IP))
-			assert.True(t, inPool)
+			requireBool(t, true, inPool)
 		})
 		t.Run("ipv4_inverse", func(t *testing.T) {
 			inPool := fakeMulti.IsIPInIPPool(net.IPAddress([]byte{241, 0, 0, 5}))
-			assert.False(t, inPool)
+			requireBool(t, false, inPool)
 		})
 		t.Run("ipv6_inverse", func(t *testing.T) {
 			ip, err := net.ResolveIPAddr("ip", "fcdd:c5b4:ff5f:f4f0::5")
-			assert.Nil(t, err)
+			if err != nil {
+				t.Fatal(err)
+			}
 			inPool := fakeMulti.IsIPInIPPool(net.IPAddress(ip.IP))
-			assert.False(t, inPool)
+			requireBool(t, false, inPool)
 		})
 	})
 
 	t.Run("allocateTwoAddressForTwoPool", func(t *testing.T) {
 		address := fakeMulti.GetFakeIPForDomain("fakednstest.example.com")
-		assert.Len(t, address, 2, "should be 2 address one for each pool")
+		requireLen(t, address, 2)
 		t.Run("eachOfThemShouldResolve:0", func(t *testing.T) {
 			domain := fakeMulti.GetDomainFromFakeDNS(address[0])
-			assert.Equal(t, "fakednstest.example.com", domain)
+			requireEqual(t, "fakednstest.example.com", domain)
 		})
 		t.Run("eachOfThemShouldResolve:1", func(t *testing.T) {
 			domain := fakeMulti.GetDomainFromFakeDNS(address[1])
-			assert.Equal(t, "fakednstest.example.com", domain)
+			requireEqual(t, "fakednstest.example.com", domain)
 		})
 	})
 
 	t.Run("understandIPTypeSelector", func(t *testing.T) {
 		t.Run("ipv4", func(t *testing.T) {
 			address := fakeMulti.GetFakeIPForDomain3("fakednstestipv4.example.com", true, false)
-			assert.Len(t, address, 1, "should be 1 address")
-			assert.True(t, address[0].Family().IsIPv4())
+			requireLen(t, address, 1)
+			requireBool(t, true, address[0].Family().IsIPv4())
 		})
 		t.Run("ipv6", func(t *testing.T) {
 			address := fakeMulti.GetFakeIPForDomain3("fakednstestipv6.example.com", false, true)
-			assert.Len(t, address, 1, "should be 1 address")
-			assert.True(t, address[0].Family().IsIPv6())
+			requireLen(t, address, 1)
+			requireBool(t, true, address[0].Family().IsIPv6())
 		})
 		t.Run("ipv46", func(t *testing.T) {
 			address := fakeMulti.GetFakeIPForDomain3("fakednstestipv46.example.com", true, true)
-			assert.Len(t, address, 2, "should be 2 address")
-			assert.True(t, address[0].Family().IsIPv4())
-			assert.True(t, address[1].Family().IsIPv6())
+			requireLen(t, address, 2)
+			requireBool(t, true, address[0].Family().IsIPv4())
+			requireBool(t, true, address[1].Family().IsIPv6())
 		})
 	})
 }

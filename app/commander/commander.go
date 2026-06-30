@@ -8,7 +8,7 @@ import (
 
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/errors"
-	"github.com/xtls/xray-core/common/signal/done"
+	"github.com/xtls/xray-core/common/net/cnc"
 	core "github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/outbound"
 	"github.com/xtls/xray-core/transport/internet"
@@ -98,10 +98,7 @@ func (c *Commander) Start() error {
 		return nil
 	}
 
-	listener := &OutboundListener{
-		buffer: make(chan net.Conn, 4),
-		done:   done.New(),
-	}
+	listener := cnc.NewOutboundListener(4)
 
 	go listen(listener)
 
@@ -109,10 +106,7 @@ func (c *Commander) Start() error {
 		errors.LogInfoInner(context.Background(), err, "failed to remove existing handler")
 	}
 
-	return c.ohm.AddHandler(context.Background(), &Outbound{
-		tag:      c.tag,
-		listener: listener,
-	})
+	return c.ohm.AddHandler(context.Background(), cnc.NewOutbound(c.tag, listener))
 }
 
 // Close implements common.Closable.

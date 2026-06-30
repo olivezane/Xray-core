@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestOpenVMessAEADHeader(t *testing.T) {
@@ -42,9 +40,9 @@ func TestOpenVMessAEADHeader2(t *testing.T) {
 	io.ReadFull(AEADR, authid[:])
 
 	out, _, readen, err := OpenVMessAEADHeader(keyw, authid, AEADR)
-	assert.Equal(t, len(sealed)-16-AEADR.Len(), readen)
-	assert.Equal(t, string(TestHeader), string(out))
-	assert.Nil(t, err)
+	requireEqual(t, len(sealed)-16-AEADR.Len(), readen)
+	requireEqual(t, string(TestHeader), string(out))
+	requireNil(t, err)
 }
 
 func TestOpenVMessAEADHeader4(t *testing.T) {
@@ -64,13 +62,13 @@ func TestOpenVMessAEADHeader4(t *testing.T) {
 		io.ReadFull(AEADR, authid[:])
 
 		out, drain, readen, err := OpenVMessAEADHeader(keyw, authid, AEADR)
-		assert.Equal(t, len(sealed)-16-AEADR.Len(), readen)
-		assert.Equal(t, true, drain)
-		assert.NotNil(t, err)
+		requireEqual(t, len(sealed)-16-AEADR.Len(), readen)
+		requireEqual(t, true, drain)
+		requireNotNil(t, err)
 		if err == nil {
 			fmt.Println(">")
 		}
-		assert.Nil(t, out)
+		requireNil(t, out)
 	}
 }
 
@@ -92,13 +90,13 @@ func TestOpenVMessAEADHeader4Massive(t *testing.T) {
 			io.ReadFull(AEADR, authid[:])
 
 			out, drain, readen, err := OpenVMessAEADHeader(keyw, authid, AEADR)
-			assert.Equal(t, len(sealed)-16-AEADR.Len(), readen)
-			assert.Equal(t, true, drain)
-			assert.NotNil(t, err)
+			requireEqual(t, len(sealed)-16-AEADR.Len(), readen)
+			requireEqual(t, true, drain)
+			requireNotNil(t, err)
 			if err == nil {
 				fmt.Println(">")
 			}
-			assert.Nil(t, out)
+			requireNil(t, out)
 		}
 	}
 }
