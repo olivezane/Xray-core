@@ -53,7 +53,8 @@ func New(ctx context.Context, config *Config) (*Instance, error) {
 
 func (g *Instance) initAccessLogger() error {
 	handler, err := createHandler(g.config.AccessLogType, HandlerCreatorOptions{
-		Path: g.config.AccessLogPath,
+		Path:        g.config.AccessLogPath,
+		LogKeepDays: g.config.LogKeepDays,
 	})
 	if err != nil {
 		return err
@@ -64,7 +65,8 @@ func (g *Instance) initAccessLogger() error {
 
 func (g *Instance) initErrorLogger() error {
 	handler, err := createHandler(g.config.ErrorLogType, HandlerCreatorOptions{
-		Path: g.config.ErrorLogPath,
+		Path:        g.config.ErrorLogPath,
+		LogKeepDays: g.config.LogKeepDays,
 	})
 	if err != nil {
 		return err

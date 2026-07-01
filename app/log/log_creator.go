@@ -9,7 +9,8 @@ import (
 )
 
 type HandlerCreatorOptions struct {
-	Path string
+	Path        string
+	LogKeepDays uint32
 }
 
 type HandlerCreator func(LogType, HandlerCreatorOptions) (log.Handler, error)
@@ -47,7 +48,7 @@ func init() {
 	}))
 
 	common.Must(RegisterHandlerCreator(LogType_File, func(lt LogType, options HandlerCreatorOptions) (log.Handler, error) {
-		creator, err := log.CreateFileLogWriter(options.Path)
+		creator, err := log.CreateFileLogWriter(options.Path, int(options.LogKeepDays))
 		if err != nil {
 			return nil, err
 		}

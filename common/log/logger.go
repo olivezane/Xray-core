@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -152,10 +153,11 @@ type fileLogWriter struct {
 	bytes      int64
 	maxSize    int64
 	maxBackups int
+	maxAge     time.Duration
 }
 
 // ponytail: rotation on write if file exceeds maxSize. Keeps maxBackups numbered backups (.1, .2, ...).
-// Time-based rotation not needed — size-based is sufficient for long-running instances.
+// Time-based cleanup deletes backups older than maxAge when rotate is called.
 func (w *fileLogWriter) Write(s string) error {
 	ts := time.Now().Format("2006-01-02T15:04:05.000Z07:00")
 	line := ts + " " + s
@@ -185,6 +187,15 @@ func (w *fileLogWriter) rotate() error {
 	}
 	w.file = file
 	w.bytes = 0
+	if w.maxAge > 0 {
+		matches, _ := filepath.Glob(w.path + ".*")
+		cutoff := time.Now().Add(-w.maxAge)
+		for _, m := range matches {
+			if fi, err := os.Stat(m); err == nil && fi.ModTime().Before(cutoff) {
+				os.Remove(m)
+			}
+		}
+	}
 	return nil
 }
 
@@ -206,14 +217,19 @@ func CreateStderrLogWriter() WriterCreator {
 	}
 }
 
-// CreateFileLogWriter returns a LogWriterCreator that creates LogWriter for the given file.
-func CreateFileLogWriter(path string) (WriterCreator, error) {
+// CreateFileLogWriter returns a WriterCreator that creates file log writers.
+// maxKeepDays: 0 disables time-based cleanup.
+func CreateFileLogWriter(path string, maxKeepDays int) (WriterCreator, error) {
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, err
 	}
 	fi, _ := file.Stat()
 	file.Close()
+	var maxAge time.Duration
+	if maxKeepDays > 0 {
+		maxAge = time.Duration(maxKeepDays) * 24 * time.Hour
+	}
 	return func() Writer {
 		file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 		if err != nil {
@@ -229,6 +245,7 @@ func CreateFileLogWriter(path string) (WriterCreator, error) {
 			bytes:      size,
 			maxSize:    10 * 1024 * 1024,
 			maxBackups: 3,
+			maxAge:     maxAge,
 		}
 	}, nil
 }
