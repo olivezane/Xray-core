@@ -21,6 +21,7 @@ type LogConfig struct {
 	LogLevel    string `json:"loglevel"`
 	DNSLog      bool   `json:"dnsLog"`
 	MaskAddress string `json:"maskAddress"`
+	LogKeepDays uint32 `json:"logKeepDays"`
 }
 
 func (v *LogConfig) Build() *log.Config {
@@ -61,5 +62,6 @@ func (v *LogConfig) Build() *log.Config {
 		config.ErrorLogLevel = clog.Severity_Warning
 	}
 	config.MaskAddress = v.MaskAddress
+	config.LogKeepDays = v.LogKeepDays
 	return config
 }
