@@ -39,7 +39,7 @@ func TestLoaderError(t *testing.T) {
 					"protocol": "test"
 				}]
 		}`,
-			Output: "parse json config",
+			Output: "unknown field",
 		},
 		{
 			Input: `{

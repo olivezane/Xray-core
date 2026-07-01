@@ -53,6 +53,7 @@ func DecodeJSONConfig(reader io.Reader) (*conf.Config, error) {
 		Reader: reader,
 	}, jsonContent)
 	decoder := json.NewDecoder(jsonReader)
+	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(jsonConfig); err != nil {
 		var pos *offset
@@ -78,12 +79,10 @@ func DecodeJSONConfig(reader io.Reader) (*conf.Config, error) {
 // byte-by-byte comment stripper and TeeReader, which are significant overhead on
 // large configs.
 func DecodeJSONConfigStrict(reader io.Reader) (*conf.Config, error) {
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, errors.New("failed to read config file").Base(err)
-	}
+	decoder := json.NewDecoder(reader)
+	decoder.DisallowUnknownFields()
 	jsonConfig := &conf.Config{}
-	if err := json.Unmarshal(data, jsonConfig); err != nil {
+	if err := decoder.Decode(jsonConfig); err != nil {
 		return nil, errors.New("failed to parse remote JSON config").Base(err)
 	}
 	return jsonConfig, nil
