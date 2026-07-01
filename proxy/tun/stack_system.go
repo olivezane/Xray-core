@@ -7,11 +7,14 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
+	mdns "github.com/miekg/dns"
 	"github.com/xtls/xray-core/common/errors"
 	xnet "github.com/xtls/xray-core/common/net"
+	dnsfeature "github.com/xtls/xray-core/features/dns"
 	tunicmp "github.com/xtls/xray-core/proxy/tun/icmp"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"
@@ -315,6 +318,13 @@ func (s *systemStack) handleUDP(srcIP, dstIP netip.Addr, data []byte) {
 	}
 	payload := data[8:length]
 
+	// ponytail: hijack UDP/53 to resolve via Xray DNS client, prevents DNS leaks
+	if dstPort == 53 && s.handler.dnsClient != nil {
+		if s.handleDNSQuery(srcIP, dstIP, srcPort, dstPort, payload) {
+			return
+		}
+	}
+
 	key := flowKey{
 		proto: protocolUDP,
 		src:   netip.AddrPortFrom(srcIP, srcPort),
@@ -352,6 +362,59 @@ func (s *systemStack) handleUDP(srcIP, dstIP netip.Addr, data []byte) {
 
 	dest := xnet.UDPDestination(xnet.IPAddress(dstIP.AsSlice()), xnet.Port(dstPort))
 	go s.handler.HandleConnection(f, dest)
+}
+
+// ponytail: resolves DNS locally via dnsClient, returns true if handled
+func (s *systemStack) handleDNSQuery(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, payload []byte) bool {
+	msg := new(mdns.Msg)
+	if err := msg.Unpack(payload); err != nil || len(msg.Question) == 0 {
+		return false
+	}
+	q := msg.Question[0]
+	domain := strings.TrimSuffix(q.Name, ".")
+
+	var opt dnsfeature.IPOption
+	switch q.Qtype {
+	case mdns.TypeA:
+		opt = dnsfeature.IPOption{IPv4Enable: true, IPv6Enable: false, FakeEnable: true}
+	case mdns.TypeAAAA:
+		opt = dnsfeature.IPOption{IPv4Enable: false, IPv6Enable: true, FakeEnable: true}
+	default:
+		return false
+	}
+
+	ips, ttl, err := s.handler.dnsClient.LookupIP(domain, opt)
+	if err != nil || len(ips) == 0 {
+		return false
+	}
+
+	resp := new(mdns.Msg)
+	resp.SetReply(msg)
+	for _, ip := range ips {
+		if ip4 := ip.To4(); ip4 != nil && q.Qtype == mdns.TypeA {
+			resp.Answer = append(resp.Answer, &mdns.A{
+				Hdr: mdns.RR_Header{Name: q.Name, Rrtype: mdns.TypeA, Class: mdns.ClassINET, Ttl: ttl},
+				A:   ip4,
+			})
+		} else if ip.To4() == nil && q.Qtype == mdns.TypeAAAA {
+			resp.Answer = append(resp.Answer, &mdns.AAAA{
+				Hdr:  mdns.RR_Header{Name: q.Name, Rrtype: mdns.TypeAAAA, Class: mdns.ClassINET, Ttl: ttl},
+				AAAA: ip,
+			})
+		}
+	}
+	if len(resp.Answer) == 0 {
+		return false
+	}
+
+	raw, err := resp.Pack()
+	if err != nil {
+		return false
+	}
+
+	pkt := buildUDPPacket(dstIP, srcIP, dstPort, srcPort, raw)
+	s.pio.WritePacket(pkt)
+	return true
 }
 
 func (s *systemStack) handleICMPv4(data []byte) {
